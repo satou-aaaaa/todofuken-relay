@@ -1,0 +1,17 @@
+{
+  "name": "都道府県リレー",
+  "short_name": "県リレー",
+  "description": "出発の県から、となりの県だけを通って目的の県へ。1日3問の地図パズル",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#dbe8ef",
+  "theme_color": "#dbe8ef",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
