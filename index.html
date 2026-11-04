@@ -244,6 +244,7 @@ function startRun(mode, opt) {
   const k = todayKey();
   save((s) => {
     if (mode !== "p" && s.runs[mode] && s.runs[mode].date === k) return; // 続きから
+    if ((mode === "d" && s.days[k]) || (mode === "h" && s.hdays[k])) return; // 別のタブで今日の分を終えていたら、もう一度は始めない（ホームに戻る）
     const list = mode === "d" ? dailyList(k) : mode === "h" ? hardList(k) : [{ seed: Math.floor(Math.random() * 2 ** 31), lv: opt }];
     s.runs[mode] = { mode, date: k, list, res: [], cur: null, id: Date.now().toString(36) };
   });
@@ -288,7 +289,8 @@ function valid(p, path) {
   return !path.slice(0, -1).includes(p.g);
 }
 const same = (r) => r && cur && r.date === cur.date && r.id === cur.id && r.res.length === cur.i;
-function keep() { save((s) => { const r = s.runs[MODE]; if (same(r)) r.cur = { i: cur.i, path: cur.path, moves: cur.moves, hints: cur.hints }; }); }
+// 同じ問題で保存済みの道のほうが先なら、古いタブの道で上書きしない
+function keep() { save((s) => { const r = s.runs[MODE]; if (same(r) && !(r.cur && r.cur.i === cur.i && r.cur.moves > cur.moves)) r.cur = { i: cur.i, path: cur.path, moves: cur.moves, hints: cur.hints }; }); }
 function paint() {
   const p = cur.p, at = cur.path[cur.path.length - 1], nb = cur.done ? [] : NB[at];
   if (!cur.blind || cur.done) {
@@ -324,7 +326,9 @@ function arrive() {
   if (!same(load().runs[MODE])) { toast("別の画面で先に進んでいます"); return play(); }
   cur.done = true; buzz([10, 40, 10]);
   const p = cur.p, rec = { m: cur.moves, d: p.d, h: cur.hints }, st = starsOf(rec);
-  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; r.res.push(rec); r.cur = null; s.trips++; for (const j of new Set(cur.path)) s.seen[T.name(j)] = (s.seen[T.name(j)] || 0) + 1; });
+  let saved = false;
+  const s = save((s) => { const r = s.runs[MODE]; if (!same(r)) return; saved = true; r.res.push(rec); r.cur = null; s.trips++; for (const j of new Set(cur.path)) s.seen[T.name(j)] = (s.seen[T.name(j)] || 0) + 1; });
+  if (!saved) { toast("別の画面で先に進んでいます"); return play(); }
   paint();
   const r = s.runs[MODE], fin = r && r.res.length >= r.list.length, best = T.path(p.s, p.g, p.closed);
   $("after").innerHTML = `<div class="verdict" role="status">
