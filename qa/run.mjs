@@ -55,6 +55,7 @@ const M = T.M, idx = (n) => M.P.findIndex((p) => p[0] === n), adj = (a, b) => M.
 const html = readFileSync(path.join(root, "index.html"), "utf8");
 check("終えた回を消すのは同じ回のときだけ・0時を過ぎたホームの「今日」のボタンは描き直す（2026-11-04 CodeRabbit）", /c\.date === run\.date && c\.id === run\.id\) s2\.runs\[MODE\] = null/.test(html) && /\$\("go-d"\)\.onclick = \(\) => \(k !== todayKey\(\) \? home\(\)/.test(html));
 check("別のタブで今日の分を終えたあと、古い画面から今日・上級をもう一度始めない（2026-11-04 CodeRabbit）", /\(mode === "d" && s\.days\[k\]\) \|\| \(mode === "h" && s\.hdays\[k\]\)\) return;/.test(html));
+check("README の URL のすぐ後ろに全角の字を続けない（Link check が URL の一部と読む。2026-11-04）", !/https?:\/\/[\x21-\x7e]*[^\x00-\x7f]/.test(readFileSync(new URL("../README.md", import.meta.url), "utf8").replace(/\]\(https?:\/\/[^)\s]+\)/g, "").replace(/<https?:\/\/[^>\s]+>/g, "")));
 check("到着を記録できなかったら到着の画面を出さない（2026-11-04 CodeRabbit）", /if \(!saved\) \{ toast\("別の画面で先に進んでいます"\); return play\(\); \}/.test(html));
 check("別のタブで先に進んだ道を、古いタブの短い道で上書きしない（2026-11-04 CodeRabbit）", /r\.cur\.i === cur\.i && r\.cur\.moves > cur\.moves\)\) r\.cur =/.test(html));
 const ext = [...html.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]).filter((u) => !/^https:\/\/fonts\.googleapis\.com(\/|$)|^https:\/\/ko-fi\.com\/satouaaaaa$/.test(u));

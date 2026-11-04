@@ -12,7 +12,7 @@
 
 - 県の形は [dataofjapan/land](https://github.com/dataofjapan/land) の `japan.geojson`（国土交通省「国土数値情報（行政区域データ）」をもとにしたもの）を、`tools/make-data.py` で線を間引いて `map.js` にしたものです。
 - となりの県は、県境の点を共有しているかで機械的に決めています（手では書いていません）。
-- 橋・トンネルは、本州四国連絡高速道路株式会社（https://www.jb-honshi.co.jp/）の3つのルートと、青函トンネル・関門トンネルです。
+- 橋・トンネルは、本州四国連絡高速道路株式会社（<https://www.jb-honshi.co.jp/>）の3つのルートと、青函トンネル・関門トンネルです。
 
 ## 開発
 
