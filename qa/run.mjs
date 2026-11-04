@@ -263,10 +263,19 @@ try {
     await pn.close(); }
 
   // 6. おもしろさ：最短の目安・遠回りの色・着いたら道を引き直し、最短でなければ最短の例を重ねる
-  { const pg = await newPage(); await pg.click("#howto-ok"); await pg.click("#go-d");
+  { // 遠回りできる隣県がある日を選ぶ（北海道が出発の日は隣が1つだけ。実行した日で QA が変わらないように。2026-11-04 CodeRabbit の指摘）
+    const p0 = await newPage();
+    const day = await p0.evaluate(() => { const g = window.__td; for (let n = 0; n < 365; n++) { const k = new Date(Date.parse("2026-11-04") + n * 864e5).toISOString().slice(0, 10); const p = g.probOf(g.dailyList(k)[0]), d = g.T.bfs(p.g, p.closed).d; if (g.T.M.N[p.s].some((x) => !p.closed.includes(x) && x !== p.g && d[x] >= d[p.s])) return k; } return null; });
+    await p0.close();
+    const pg = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    pg.on("pageerror", (e) => errors.push(e.stack));
+    await pg.addInitScript((at) => { const RD = Date, off = RD.parse(at) - RD.now(); window.Date = class extends RD { constructor(...a) { if (a.length) super(...a); else super(RD.now() + off); } static now() { return RD.now() + off; } }; }, day + "T03:00:00Z");
+    await pg.goto(url); await pg.evaluate(() => localStorage.clear()); await pg.reload();
+    await pg.click("#howto-ok"); await pg.click("#go-d");
     let c = await curT(pg);
     check("問題の画面に最短の回数（目安）が出る", (await pg.textContent("#par")).includes(`${c.p.d}回`));
     const d = T.bfs(c.p.g, c.p.closed).d, wrong = M.N[c.p.s].find((x) => !c.p.closed.includes(x) && x !== c.p.g && d[x] >= d[c.p.s]);
+    check("遠回りを試す問題に、目的の県に近づかない隣県がある（実行した日によらず下の検査が全部動く）", wrong !== undefined, `${day} ${c.p.s}`);
     await pg.click(`#nx button[data-j="${wrong}"]`);
     const w = T.path(wrong, c.p.g, c.p.closed);
     for (const j of w.slice(1, -1)) await pg.click(`#nx button[data-j="${j}"]`);
@@ -337,6 +346,11 @@ try {
     check("カレンダー：全部最短の日は濃い★3・どれも★2以上は★2・★1がある日は★1、上級の日に「上」", (await cls(19)).includes("p3") && (await cls(18)).includes("p2") && (await cls(17)).includes("p1") && (await pc.textContent('.cal [data-k="2026-11-19"]')).includes("上"));
     check("カレンダー：取りこぼした過去7日だけ押せる（8日前より前と今日は押せない）", (await pc.locator(".cal button.miss").count()) === 4 && (await pc.locator('.cal button[data-k="2026-11-12"]').count()) === 0 && (await cls(20)).includes("today"));
     check("カレンダー：連続の日は1以上のときだけ小さく出す・休んだ日を責める言葉を書かない", (await pc.textContent("header")).includes("連続 3日") && !/サボ|休んだ|さぼ|失敗|残念/.test(await pc.textContent("#app")));
+    { // キーボードで選んだボタンに枠が出る（all:unset で消えない。2026-11-04 CodeRabbit の指摘）
+      await pc.keyboard.press("Shift");
+      const bad = await pc.evaluate(() => [...document.querySelectorAll("button:not([disabled]),a[href]")].filter((b) => b.checkVisibility()).filter((b) => { b.focus(); const cs = getComputedStyle(b); return !b.matches(":focus-visible") || cs.outlineStyle === "none" || parseFloat(cs.outlineWidth) < 2; }).map((b) => b.className || b.id || b.tagName));
+      check("キーボードで選んだボタン（カレンダーのあとから遊ぶ日も）に枠が出る", bad.length === 0 && (await pc.locator(".cal button.miss").count()) > 0, bad.join(","));
+    }
     check("カレンダー：始めた月より前と今月より先へは行けない", (await pc.isDisabled("#prev")) && (await pc.isDisabled("#next")));
     await pc.click('.cal button[data-k="2026-11-16"]');
     const late = await pc.evaluate(() => { const g = window.__td, c = g.cur(), p = g.probOf(g.dailyList("2026-11-16")[0]); return { mode: g.mode(), ok: c.p.s === p.s && c.p.g === p.g && JSON.stringify(c.p.closed) === JSON.stringify(p.closed) }; });
