@@ -36,6 +36,7 @@ node qa/run.mjs   # となりの県のデータ（接する・接しない県の
 - 押せる所は高さ44px以上（QA が見る）。機能を足す・直すたびに `qa/run.mjs` に検査を足す。乱数で組む部分は何千回も作って確かめる（shared-workflows `incidents/2026-10-31-roppo-empty-village.md`）。
 - PWA（`manifest.webmanifest`・`sw.js`・`icon-*.png`）：画面のファイルを足したら `sw.js` の `SHELL` にも足し、中身を大きく変えたら `CACHE` の版を上げる。アイコンは `node tools/make-icons.cjs`、SNS 用の絵 `og.png` は `node tools/make-og.cjs`（今日の問題を入れない）。
 - 引き継ぎコード（別の端末へ記録を移す）：`transfer.js`・`qa/transfer-check.mjs` は shared-workflows の `template/` の写し（ここで直さない。直すときはひな形を直して配り、`引き継ぎの版` を上げる）。`index.html` の script の `data-keys` は記録のキーだけを書く。記録の形を変えたら `qa/run.mjs` の `checkTransfer` の `sample` も合わせる。sw.js の `SHELL` から `./transfer.js` を外さない（shared-workflows `routines/game-dev.md`「引き継ぎコード」）。
+- 見やすさ：`</head>` の前の見やすさの設定（`<!-- a11y:begin -->`〜`end`）は shared-workflows `template/a11y/a11y.html` の写しで、ここでは直さない。`qa/a11y.mjs` も `template/qa/a11y.mjs` の写し（画面の足し方・許しは `qa/a11y.json` に理由つき）。色だけで分けない（出発は▶・目的は◎・いまいる県は●・となりの県は点線の縁・ヒントは💡と「ヒント」・最短の例は点線・最短をこえたら「最短より+N」・何問目かの点は高さと中の空き・取れない星は ☆・県帳のまだは破線と「まだ」・カレンダーの見本に★の数。「色の見分けを助ける」では出発＝青 `#0072B2`・目的と道＝朱 `#D55E00`・ヒント＝橙 `#E69F00`）・コントラスト 4.5:1・知らせは `#live`（role=status。進んだ県・ヒント・到着を文字で）・「動きを減らす」（`calm()`）で振動とすべるスクロールを止める・決めつけの言葉を使わない（shared-workflows `routines/game-dev.md`「だれでも遊べるように」）。
 - 公開リポジトリなので、個人情報・鍵を入れない。
 
 ## 公開
