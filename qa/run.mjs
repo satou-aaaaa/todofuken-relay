@@ -61,7 +61,7 @@ check("別のタブで先に進んだ道を、古いタブの短い道で上書�
 const ext = [...html.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]).filter((u) => !/^https:\/\/fonts\.googleapis\.com(\/|$)|^https:\/\/ko-fi\.com\/satouaaaaa$/.test(u));
 check("外から読むのは文字（Google Fonts）だけ。スクリプト・広告・解析を入れない", ext.length === 0, ext.join(","));
 check("CSP で通信先を自分だけにしている", /connect-src 'self'/.test(html) && !/connect-src[^;"]*https/.test(html));
-check("Math.random は練習の問題の種だけ（今日の3問・上級は日付の種）", (html.match(/Math\.random/g) || []).length === 1 && !/Math\.random/.test(readFileSync(path.join(root, "gen.js"), "utf8")));
+check("Math.random は練習・とことんの問題の種だけ（今日の3問・上級は日付の種）", (html.match(/Math\.random/g) || []).length === 3 && !/Math\.random/.test(readFileSync(path.join(root, "gen.js"), "utf8")));
 check("画面にお笑いの言葉を入れない（本物っぽく）", !/お笑い|ギャグ|ボケ|ツッコミ|なんでやねん|（うそ）/.test(html));
 { const og = (k) => (html.match(new RegExp(`<meta (?:property|name)="${k}" content="([^"]+)"`)) || [])[1] || "";
   const png = readFileSync(path.join(root, "og.png"));
@@ -386,6 +386,25 @@ try {
     await pz.click('.cal button[data-k="2026-11-13"]');
     check("開いたまま日付が進んで過去7日から外れた日は、あとから始めない", !(await pz.evaluate(() => window.__td.mode())).startsWith("a"));
     await pz.close(); }
+  { // とことん：問題が次々に出る・近場→遠出→通行止め・ヒントは🎫を使う・降りると自己ベスト（2026-11-05 satou さん「一日で遊べる量が少なすぎる」）
+    const pe = await pageAt("2026-11-20", 390, base());
+    check("とことんの並び（300回）：近場3→遠出7→通行止め50、種はばらばら・問題が作れる", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 300; n++) { const L = g.endlessList(); if (L.length !== 60 || new Set(L.map((x) => x.seed)).size < 59) return false; if (!L.every((x, i) => x.lv === (i < 3 ? 0 : i < 10 ? 1 : 2))) return false; if (n < 5 && !L.every((x) => g.probOf(x))) return false; } return true; }));
+    check("ホームに「とことん」の大きなボタン", (await pe.locator("#go-e.main").count()) === 1);
+    await pe.click("#go-e");
+    for (let j = 0; j < 3; j++) { await solveNow(pe); await pe.click("#next"); }
+    check("とことんは何問目かを出し、🎫が3枚", (await pe.textContent("header")).includes("4問目") && (await pe.evaluate(() => window.__td.load().runs.e.life)) === 3);
+    await pe.click("#hint");
+    check("とことんのヒントは🎫を1枚使う", (await pe.evaluate(() => window.__td.load().runs.e.life)) === 2);
+    await pe.click("#back"); await pe.click("#go-e");
+    check("とことんは途中で閉じても続きから（4問目・🎫2・ヒント1回のまま）", (await pe.textContent("header")).includes("4問目") && (await pe.evaluate(() => window.__td.load().runs.e.life)) === 2 && (await pe.evaluate(() => window.__td.cur().hints)) === 1);
+    await pe.click("#quit");
+    check("降りると着いた数と自己ベスト更新が出て、記録に残る（今日の記録・連続には入らない）", (await pe.textContent("#eres")).includes("3問") && (await pe.textContent("#ebest")).includes("自己ベスト更新") && (await pe.evaluate(() => { const s = window.__td.load(); return s.ebest === 3 && !s.runs.e && Object.keys(s.days).length === 0; })));
+    await pe.click("#go-e"); await pe.click("#quit");
+    check("ベストに届かないと、ベストと「あと何問で更新」を出し、ベストは下げない", (await pe.textContent("#ebest")).includes("あと4問で更新") && (await pe.evaluate(() => window.__td.load().ebest)) === 3);
+    await pe.click("#go-e");
+    await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.e.life = 0; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
+    check("🎫が無いとヒントは押せない", await pe.locator("#hint").isDisabled());
+    await pe.close(); }
   { // 1回目の今日の3問を終えると「旅立ち」が出て、結果を開き直すと出ない
     const pf = await pageAt("2026-11-20", 390, base());
     await pf.click("#go-d"); for (let j = 0; j < 3; j++) { await solveNow(pf); await pf.click("#next"); }
@@ -394,6 +413,7 @@ try {
     check("初めて今日の3問を終えると結果に「🏅 実績：旅立ち」、開き直すと出ない（うるさくしない）", a1.includes("旅立ち") && a1.includes("まっすぐの日") && (await pf.locator("#achnew").count()) === 0, a1);
     check("結果に「あと少しの実績」を1つだけ出す：まだの実績のうち目標にいちばん近いもの（取った・0のものは選ばない。研究の要点 12）", await pf.evaluate(() => { const g = window.__td, s = g.load(), t = g.tally(s), nx = g.nextAch(s), el = document.querySelectorAll("#achnext"); if (!nx) return el.length === 0; const cand = g.ACH.filter((a) => t[a[4]] > 0 && t[a[4]] < a[5]); return el.length === 1 && el[0].textContent.includes(nx.name) && el[0].textContent.includes("あと" + nx.left) && cand.every((a) => t[a[4]] / a[5] <= nx.r + 1e-12) && !g.achGot(s).includes(nx.id); }) && await pf.evaluate(() => window.__td.nextAch(window.__td.load()) !== null));
     check("今日の3問の結果はシェアの文がある（あとからとは別）", (await pf.locator(".share").count()) === 1);
+    check("今日の3問の結果に「続けて遊ぶ：とことん」の大きなボタン", (await pf.locator("#go-e.main").count()) === 1);
     await pf.close(); }
   { // 320px・390px：ホーム・実績・カレンダー・結果が横にはみ出さず、押せる所は44px以上
     const st = base(); st.days["2026-11-19"] = R3([0, 0, 0]); st.adays["2026-11-15"] = R3([1, 0, 0]);
