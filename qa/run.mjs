@@ -282,7 +282,7 @@ try {
     for (const j of w.slice(1, -1)) await pg.click(`#nx button[data-j="${j}"]`);
     check("最短の回数をこえたら、進んだ回数の色が変わる", (await curT(pg)).moves > c.p.d ? (await pg.locator("#left.over").count()) === 1 : true);
     await pg.click(`#nx button[data-j="${w[w.length - 1]}"]`);
-    check("遠回りで着くと、道を引き直して見せ、最短の道の例を緑の点線で重ねる（答え合わせ）", (await pg.locator("#mp .rt.draw").count()) === 1 && (await pg.locator("#mp .best").count()) === 1 && (await pg.locator("#mp path.g.got").count()) === 1 && (await pg.textContent(".verdict")).includes("緑の点線"));
+    check("遠回りで着くと、道を引き直して見せ、最短の道の例を点線で重ねる（答え合わせ。色の名前に頼らず「点線」と書く）", (await pg.locator("#mp .rt.draw").count()) === 1 && (await pg.locator("#mp .best").count()) === 1 && (await pg.locator("#mp path.g.got").count()) === 1 && (await pg.textContent(".verdict")).includes("点線（‥‥）が最短の例"));
     await pg.click("#next"); await solveNow(pg);
     check("最短で着いたときは点線を重ねない", (await pg.locator("#mp .best").count()) === 0 && (await pg.locator("#mp .rt.draw").count()) === 1 && (await pg.locator("#left.over").count()) === 0);
     await pg.close(); }
@@ -432,12 +432,55 @@ try {
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0]);
 } finally {
+  try { // 色だけで分けない（WCAG 1.4.1。shared-workflows routines/game-dev.md A1）：出発・目的・いまいる所・となり・ヒント・最短の点線・進み具合・星・県帳のまだ・最短をこえた回数が、記号・文字・形でも出ている。知らせは #live に文字で出る
+    const pa = await newPage();
+    await pa.click("#howto-ok");
+    await pa.click("#go-d");
+    let c = await curT(pa);
+    const lab = await pa.evaluate(() => [...document.querySelectorAll("#mp svg text")].map((t) => t.textContent));
+    const sn = T.short(c.p.s), gn = T.short(c.p.g);
+    check("色だけで分けない：地図の県名に出発は▶・目的は◎、問題の上にも「▶ 出発」「◎ 目的」", lab.includes("▶" + sn) && lab.includes("◎" + gn) && (await pa.textContent(".goal")).includes("▶ 出発") && (await pa.textContent(".goal")).includes("◎ 目的"));
+    const nbStyle = await pa.evaluate(() => { const e = document.querySelector("#mp path.nb"); const cs = getComputedStyle(e); return cs.strokeDasharray !== "none" && parseFloat(cs.strokeWidth) >= 1.5; });
+    check("色だけで分けない：となりの県（押せる県）は地図で点線の縁", nbStyle);
+    const dots = await pa.evaluate(() => [...document.querySelectorAll(".dots i")].map((i) => { const cs = getComputedStyle(i); return { h: i.getBoundingClientRect().height, bg: cs.backgroundColor, bw: cs.borderTopWidth }; }));
+    check("色だけで分けない：何問目かの点は、いまの問題が高く・まだの問題は中が空（枠だけ）", dots[0].h > dots[1].h && dots[1].bg === "rgba(0, 0, 0, 0)" && parseFloat(dots[1].bw) >= 1);
+    const first = M.N[c.p.s].find((x) => !c.p.closed.includes(x) && x !== c.p.g);
+    await pa.click(`#nx button[data-j="${first}"]`);
+    check("色だけで分けない：道の札は出発に▶・いまいる県に●（読み上げにも「〜へ進みました」）", await pa.evaluate(() => getComputedStyle(document.querySelector("#trip b.s"), "::before").content.includes("▶") && getComputedStyle(document.querySelector("#trip b.c"), "::before").content.includes("●")) && /へ進みました/.test(await pa.waitForFunction(() => document.getElementById("live").textContent).then(() => pa.textContent("#live"))));
+    await pa.click("#hint");
+    c = await curT(pa);
+    const hl = await pa.evaluate(() => [...document.querySelectorAll("#mp svg text")].map((t) => t.textContent));
+    check("色だけで分けない：ヒントの県は地図の県名とボタンに💡と「ヒント」、知らせ（#live）にも県名", hl.includes("💡" + T.short(c.hint)) && (await pa.textContent("#nx button.hint")).includes("💡") && (await pa.textContent("#nx button.hint")).includes("ヒント") && (await pa.waitForFunction((n) => document.getElementById("live").textContent.includes(n), M.P[c.hint][0]).then(() => true, () => false)));
+    // 遠回りして、最短をこえた数を文字でも出す
+    const at = c.path[c.path.length - 1], back = c.path[0];
+    for (let k = 0; k < 6 && c.moves <= c.p.d; k++) { await pa.click(`#nx button[data-j="${back}"]`); await pa.click(`#nx button[data-j="${at}"]`); c = await curT(pa); }
+    check("色だけで分けない：最短の回数をこえたら「最短より+N」と文字でも出す", (await pa.textContent("#left")).includes(`最短より+${c.moves - c.p.d}`));
+    await solveNow(pa);
+    check("色だけで分けない：着いた知らせを #live に文字で（星の数も）、取れない星は ☆", /に到着。星\dつ/.test(await pa.waitForFunction(() => /到着/.test(document.getElementById("live").textContent)).then(() => pa.textContent("#live"))) && /^☆*$/.test(await pa.textContent(".verdict .stars .off")));
+    await pa.click("#back"); await pa.click("#go-dex");
+    check("色だけで分けない：県帳のまだの県は「まだ」の文字と破線の枠（薄くするだけにしない）", await pa.evaluate(() => { const d = document.querySelector(".dex .no"); return !!d && d.textContent.includes("まだ") && getComputedStyle(d).borderTopStyle === "dashed" && getComputedStyle(d).opacity === "1"; }));
+    await pa.click("#back"); await pa.click("#go-cal");
+    check("色だけで分けない：カレンダーの色の見本に★の数も書く", /★★★ 全部最短/.test(await pa.textContent(".legend")) && /★★ ★2以上/.test(await pa.textContent(".legend")));
+    // 色の見分けを助ける設定：地図の色をカラーユニバーサルデザインの組に替え、振動を止める設定がある
+    await pa.evaluate(() => { localStorage.setItem("a11y-v1", JSON.stringify({ cvd: true, calm: true })); }); await pa.reload();
+    await pa.click("#go-d");
+    const cv = await pa.evaluate(() => ({ cvd: document.documentElement.classList.contains("a11y-cvd"), s: getComputedStyle(document.querySelector("#mp path.s")).fill, best: (() => { const l = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); l.setAttribute("class", "best"); document.querySelector("#mp svg").append(l); return getComputedStyle(l).stroke; })() }));
+    check("「色の見分けを助ける」では出発の県を青・最短の点線を青（#0072B2）に替える", cv.cvd && cv.s === "rgb(143, 200, 238)" && cv.best === "rgb(0, 114, 178)", JSON.stringify(cv));
+    check("「動きを減らす」で振動させない・すべるスクロールにしない", /const buzz = \(n = 12\) => \{ if \(calm\(\)\) return;/.test(html) && /behavior: calm\(\) \? "auto" : "smooth"/.test(html));
+    await pa.close();
+  } catch (e) { check("色だけで分けない検査", false, e.message.split("\n")[0]); }
   try { // 引き継ぎコード（別の端末へ記録を移す。shared-workflows template/qa/transfer-check.mjs）
     await checkTransfer({ browser, url, game: "todofuken-relay", sample: { "todofuken-v1": JSON.stringify({ v: 1, tut: true }) }, check, open: async (p) => { await p.click("#howto-ok", { timeout: 1500 }).catch(() => {}); } });
   } catch (e) { check("引き継ぎコード", false, e.message.split("\n")[0]); }
   await browser.close();
 }
 check("画面のエラーが無い", errors.length === 0, errors.slice(0, 3).join(" | "));
+
+{ // 見やすさ・読みやすさ・偏り（shared-workflows template/qa/a11y.mjs の写し。routines/game-dev.md「だれでも遊べるように」）
+  const { spawnSync } = await import("node:child_process");
+  const a = spawnSync(process.execPath, [path.join(root, "qa", "a11y.mjs")], { encoding: "utf8", env: process.env });
+  check("見やすさ・読みやすさの検査（qa/a11y.mjs。中身は qa-report/a11y.md）", a.status === 0, (a.stdout.match(/^- ❌.*$/gm) || []).join(" / ") || (a.status ? a.stderr.slice(-300) : ""));
+}
 
 const ng = results.filter((r) => !r.ok);
 const md = `# 都道府県リレー QA\n\n${results.map((r) => `- ${r.ok ? "✅" : "❌"} ${r.name}${r.detail ? `（${r.detail}）` : ""}`).join("\n")}\n\n${ng.length ? `❌ ${ng.length}件` : `✅ ${results.length}項目すべて通過`}\n`;

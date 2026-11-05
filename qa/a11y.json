@@ -1,0 +1,11 @@
+{
+  "screens": [
+    { "name": "今日の3問", "click": ["#go-d"] },
+    { "name": "今日の3問・ヒント", "click": ["#go-d", "#hint"] },
+    { "name": "練習・通行止め", "click": ["#go-p", ".lv button[data-lv='2']"] },
+    { "name": "とことん", "click": ["#go-e"] },
+    { "name": "県帳", "click": ["#go-dex"] },
+    { "name": "カレンダー", "click": ["#go-cal"] },
+    { "name": "実績", "click": ["#go-ach"] }
+  ]
+}
