@@ -392,6 +392,7 @@ try {
     const a1 = await pf.textContent("#achnew").catch(() => "");
     await pf.click("#back"); await pf.click("#go-d");
     check("初めて今日の3問を終えると結果に「🏅 実績：旅立ち」、開き直すと出ない（うるさくしない）", a1.includes("旅立ち") && a1.includes("まっすぐの日") && (await pf.locator("#achnew").count()) === 0, a1);
+    check("結果に「あと少しの実績」を1つだけ出す：まだの実績のうち目標にいちばん近いもの（取った・0のものは選ばない。研究の要点 12）", await pf.evaluate(() => { const g = window.__td, s = g.load(), t = g.tally(s), nx = g.nextAch(s), el = document.querySelectorAll("#achnext"); if (!nx) return el.length === 0; const cand = g.ACH.filter((a) => t[a[4]] > 0 && t[a[4]] < a[5]); return el.length === 1 && el[0].textContent.includes(nx.name) && el[0].textContent.includes("あと" + nx.left) && cand.every((a) => t[a[4]] / a[5] <= nx.r + 1e-12) && !g.achGot(s).includes(nx.id); }) && await pf.evaluate(() => window.__td.nextAch(window.__td.load()) !== null));
     check("今日の3問の結果はシェアの文がある（あとからとは別）", (await pf.locator(".share").count()) === 1);
     await pf.close(); }
   { // 320px・390px：ホーム・実績・カレンダー・結果が横にはみ出さず、押せる所は44px以上
