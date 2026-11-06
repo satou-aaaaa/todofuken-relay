@@ -39,6 +39,18 @@
     }
     return null;
   }
-  const B = { rng, seedOf, LV, HARD, M, bfs, path, make, name: (i) => M.P[i][0], short: (i) => M.P[i][0].replace(/(都|府|県)$/, "") };
+  // その種類で出せる問題を全部（make が種から作れるものと同じ。とことん・練習で、乱数で選び直しても新しい問題が見つからないときに使う。make は変えない）
+  function all(L) {
+    const D = N.map((_, i) => bfs(i).d), out = [];
+    for (let s = 0; s < n; s++) for (let g = 0; g < n; g++) {
+      const d = D[s][g]; if (!(d >= (L.close ? L.min - 1 : L.min) && d <= L.max)) continue;
+      if (!L.close) { out.push([s, g, []]); continue; }
+      for (let c = 0; c < n; c++) { if (c === s || c === g || !(D[s][c] > 0 && D[s][c] < d && D[c][g] === d - D[s][c])) continue; const r = bfs(s, [c]).d[g]; if (r < 0 || r <= d || r > d + 3 || r < L.min || r > L.max + 1) continue; out.push([s, g, [c]]); }
+    }
+    return out;
+  }
+  // 出発・目的・通行止めから make と同じ形の問題を作る
+  function build(s, g, closed, L) { const r = bfs(s, closed); return r.d[g] < 0 ? null : { s, g, closed, d: r.d[g], ways: r.w[g], lv: L.name }; }
+  const B = { rng, seedOf, LV, HARD, M, bfs, path, make, all, build, name: (i) => M.P[i][0], short: (i) => M.P[i][0].replace(/(都|府|県)$/, "") };
   if (typeof module !== "undefined") module.exports = B; else root.TDR = B;
 })(this);

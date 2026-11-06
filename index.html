@@ -362,7 +362,9 @@ const lvOf = (lv) => (lv === 3 ? T.HARD : T.LV[lv]);
 const dailyList = (k) => T.LV.map((L, i) => ({ seed: T.seedOf(k + ":d:" + i), lv: i }));
 const hardList = (k) => [0, 1].map((i) => ({ seed: T.seedOf(k + ":h:" + i), lv: 3 }));
 const cache = new Map();
-const probOf = (it) => { const k = it.seed + ":" + it.lv; if (!cache.has(k)) cache.set(k, T.make(it.seed, lvOf(it.lv))); return cache.get(k); };
+// 問題は種（seed）か、出せる問題の一覧の名前（k。freshItem が乱数で見つけられなかったとき）から作る。どちらでもない・作れない問題は null
+const pools = {}, poolOf = (lv) => pools[lv] || (pools[lv] = new Map(T.all(lvOf(lv)).map((e) => [e[0] + "-" + e[1] + "-" + e[2].join(","), e])));
+const probOf = (it) => { if (!it || !Number.isInteger(it.lv) || it.lv < 0 || it.lv > 3) return null; const k = (typeof it.k === "string" ? "k" + it.k : it.seed) + ":" + it.lv; if (!cache.has(k)) { const e = typeof it.k === "string" ? poolOf(it.lv).get(it.k) : null; cache.set(k, e ? T.build(e[0], e[1], e[2], lvOf(it.lv)) : Number.isFinite(it.seed) ? T.make(it.seed, lvOf(it.lv)) : null); } return cache.get(k); };
 // ★：最短で着けば3、2県まで遠回りで2、それより多いと1。ヒント1回ごとに1つ減る（最低1）
 const starsOf = (r) => Math.max(1, (r.m === r.d ? 3 : r.m - r.d <= 2 ? 2 : 1) - (r.h || 0));
 const starStr = (s) => `<span class="stars" aria-label="星${s}つ">${"★".repeat(s)}<span class="off">${"☆".repeat(3 - s)}</span></span>`;
@@ -380,10 +382,28 @@ const doneOf = (r) => !!r && r.res.length >= r.list.length, recOf = (r) => ({ r:
 // 同じ問題（出発・目的・通行止めが同じ）は、1回のとことんの中と、最近遊んだ問題（記録の recent、新しい RECENT 問）では出さない（freshItem）。make は変えない（今日の3問・上級は今までのまま）
 const ERAMP = [[0, 3], [1, 7], [2, 50]], EMORE = [[1, 10], [2, 30]], RECENT = 200;
 const keyOf = (p) => p.s + "-" + p.g + "-" + p.closed.join(",");
-function freshItem(lv, avoid) { let it = null; for (let t = 0; t < 60; t++) { it = { seed: Math.floor(Math.random() * 2 ** 31), lv }; const p = probOf(it); if (!p) continue; const k = keyOf(p); if (!avoid.has(k)) { avoid.add(k); return it; } } return it; } // 60回選び直しても新しい問題が無いときだけ（ほぼ全部遊んだ）重なりを許す
+const kOf = (it) => { const p = probOf(it); return p ? keyOf(p) : null; };
+// 作れない問題（null）は返さない。乱数で60回選び直しても新しい問題が無ければ、出せる問題を全部見て、まだのものから選ぶ（残っている限り必ず新しい問題）。
+// 全部出し終えたら、その種類をもう1周（重なりを許す）。そのときも直前の問題（prev）と同じものは出さない
+function freshItem(lv, avoid, prev) {
+  for (let t = 0; t < 60; t++) { const it = { seed: Math.floor(Math.random() * 2 ** 31), lv }, p = probOf(it); if (!p) continue; const k = keyOf(p); if (!avoid.has(k)) { avoid.add(k); return it; } }
+  const ks = [...poolOf(lv).keys()]; let left = ks.filter((k) => !avoid.has(k));
+  if (!left.length) { ks.forEach((k) => avoid.delete(k)); left = ks.filter((k) => k !== prev); }
+  const k = left[Math.floor(Math.random() * left.length)]; avoid.add(k); return { k, lv };
+}
 const recentKeys = (s) => new Set(Object.keys((s && s.recent) || {}));
-function endlessList(avoid = new Set()) { avoid = new Set(avoid); const out = []; for (const [lv, n] of ERAMP) for (let j = 0; j < n; j++) out.push(freshItem(lv, avoid)); return out; }
-function moreList(run, avoid = new Set()) { avoid = new Set(avoid); for (const it of run.list) { const p = probOf(it); if (p) avoid.add(keyOf(p)); } const out = []; for (const [lv, n] of EMORE) for (let j = 0; j < n; j++) out.push(freshItem(lv, avoid)); for (let j = out.length - 1; j > 0; j--) { const k = Math.floor(Math.random() * (j + 1)); [out[j], out[k]] = [out[k], out[j]]; } return out; }
+function endlessList(avoid = new Set()) { avoid = new Set(avoid); const out = []; for (const [lv, n] of ERAMP) for (let j = 0; j < n; j++) out.push(freshItem(lv, avoid, kOf(out[out.length - 1]))); return out; }
+function moreList(run, avoid = new Set()) { avoid = new Set(avoid); for (const it of run.list) { const k = kOf(it); if (k) avoid.add(k); } const out = []; for (const [lv, n] of EMORE) for (let j = 0; j < n; j++) out.push(freshItem(lv, avoid, kOf(out[out.length - 1] || run.list[run.list.length - 1]))); for (let j = out.length - 1; j > 0; j--) { const k = Math.floor(Math.random() * (j + 1)); [out[j], out[k]] = [out[k], out[j]]; }
+  // 全部出し終えて重なりを許したあとも、となり合う2問（前の並びとのつなぎ目も）は同じにしない
+  for (let j = 0; j < out.length; j++) { const last = kOf(j ? out[j - 1] : run.list[run.list.length - 1]); if (kOf(out[j]) !== last) continue; const q = out.findIndex((x, q) => q > j && kOf(x) !== last); if (q > 0) [out[j], out[q]] = [out[q], out[j]]; }
+  return out; }
+// とことんの並びを出す前に見直す：作れない問題（壊れた記録など）は差し替え、まだ見せていない次の問題が最近遊んだ問題（recent。練習で遊んだなど）なら差し替える。遊んでいる途中の問題（cur）は変えない
+function tidyE(r, s) {
+  const i = r.res.length, rec = recentKeys(s), keep = !!(r.cur && r.cur.i === i), used = new Set(rec); let ch = false;
+  for (const it of r.list) { const k = kOf(it); if (k) used.add(k); }
+  for (let j = i; j < r.list.length; j++) { const it = r.list[j], k = kOf(it); if (k && !(j === i && !keep && rec.has(k))) continue; const lv = it && Number.isInteger(it.lv) && it.lv >= 0 && it.lv <= 3 ? it.lv : 2; r.list[j] = freshItem(lv, used, kOf(r.list[j - 1])); if (r.cur && r.cur.i === j) r.cur = null; ch = true; }
+  return ch;
+}
 // 遊んだ問題を recent に覚える（数は合わせるときに大きいほうが残る。新しい RECENT 問だけ残す）
 function remember(s, p) { const r = (s.recent = s.recent && typeof s.recent === "object" && !Array.isArray(s.recent) ? s.recent : {}); r[keyOf(p)] = Date.now(); const ks = Object.keys(r); if (ks.length > RECENT) ks.sort((a, b) => r[a] - r[b]).slice(0, ks.length - RECENT).forEach((k) => delete r[k]); }
 const runKey = (mode, date) => (mode === "a" ? "a:" + date : mode); // 途中経過の入れ物の名前（あとからは日付ごと）
@@ -525,7 +545,7 @@ function startRun(mode, opt) {
       s.runs[runKey("a", opt)] = { mode, date: opt, list: dailyList(opt), res: [], cur: null, id: "a" + opt, a0: achGot(s) };
       return;
     }
-    if (mode === "e") { const re = s.runs.e; if (re && !doneOf(re)) return; s.runs.e = { mode, date: k, list: endlessList(recentKeys(s)), res: [], cur: null, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), a0: achGot(s) }; return; } // とことん：途中なら続きから（日をまたいでも続けられる。前の版の life は読まない）
+    if (mode === "e") { const re = s.runs.e; if (re && Array.isArray(re.res) && !doneOf(re)) return; if (re && Array.isArray(re.res)) s.ebest = Math.max(s.ebest || 0, re.res.length); s.runs.e = { mode, date: k, list: endlessList(recentKeys(s)), res: [], cur: null, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), a0: achGot(s) }; return; } // とことん：途中なら続きから（日をまたいでも続けられる。前の版の life は読まない）。前の版のタブで終えたまま結果を見ていない回は、自己ベストに入れてから新しく始める
     if (mode !== "p" && s.runs[mode] && s.runs[mode].date === k) return; // 続きから
     if ((mode === "d" && s.days[k]) || (mode === "h" && s.hdays[k])) return; // 別のタブで今日の分を終えていたら、もう一度は始めない（ホームに戻る）
     const list = mode === "d" ? dailyList(k) : mode === "h" ? hardList(k) : [freshItem(opt, recentKeys(s))]; // 練習は最近遊んだ問題を避ける
@@ -539,8 +559,9 @@ function startRun(mode, opt) {
 // 今の問題：{ i, date, id, p, path:[県], moves, hints, hint, done, blind }
 let cur = null;
 function play() {
-  const s = load(), run = s.runs[MODE];
+  let s = load(), run = s.runs[MODE];
   if (!run) return home();
+  if (run.mode === "e" && !doneOf(run) && tidyE(JSON.parse(JSON.stringify(run)), s)) { const id = run.id; s = save((s2) => { const r = s2.runs.e; if (r && r.id === id) tidyE(r, s2); }); run = s.runs[MODE]; if (!run) return home(); }
   const i = run.res.length;
   if (i >= run.list.length) return finish();
   const it = run.list[i], p = probOf(it), blind = it.lv === 3;
@@ -654,7 +675,7 @@ function endFinish(run) {
     <p class="big" id="eres">${n}問 到着</p>
     <p class="note" id="ebest">${best ? "🎉 自己ベスト更新！" : `自己ベスト ${s.ebest}問${s.ebest > n ? `（あと${s.ebest - n + 1}問で更新）` : ""}`}</p>
     ${newAch.length ? `<p class="achnew" id="achnew">${newAch.map((id) => `🏅 実績：${ACH.find((a) => a[0] === id)[1]}`).join("<br>")}</p>` : ""}
-    ${n ? `<div class="res">${run.list.slice(0, n).map((it, j) => { const p = probOf(it), r = run.res[j]; return `<div><span>${T.short(p.s)} → ${T.short(p.g)}<br><small style="color:var(--ink2)">${r.m}回（最短${r.d}回）${r.h ? `・ヒント${r.h}` : ""}</small></span>${starStr(starsOf(r))}</div>`; }).join("")}</div>` : ""}
+    ${n ? `<div class="res">${run.list.slice(0, n).map((it, j) => { const p = probOf(it), r = run.res[j]; if (!p || !r) return ""; return `<div><span>${T.short(p.s)} → ${T.short(p.g)}<br><small style="color:var(--ink2)">${r.m}回（最短${r.d}回）${r.h ? `・ヒント${r.h}` : ""}</small></span>${starStr(starsOf(r))}</div>`; }).join("")}</div>` : ""}
     <button class="main" id="go-e">もう一度とことん</button>
     <div class="row"><button class="sub" id="go-p">練習する</button><button class="sub" id="go-dex">県帳を見る</button></div>
     <p class="note"><a href="${FEEDBACK}" target="_blank" rel="noopener">感想を送る</a></p>`;
@@ -760,7 +781,7 @@ function cal(ym) {
   bindFooter(); window.scrollTo(0, 0);
 }
 
-window.__td = { endlessList, moreList, keyOf, freshItem, remember, RECENT, runKey, lateDays, ACH, achGot, nextAch, tally, cal, mapHtml, mode: () => MODE, T, dailyList, hardList, probOf, starsOf, todayKey, dayNo, shareText, streak, load, valid, cur: () => cur, go: (j) => go(j), play: (m) => { if (m) MODE = m; play(); } };
+window.__td = { endlessList, moreList, keyOf, freshItem, tidyE, poolOf, kOf, remember, RECENT, runKey, lateDays, ACH, achGot, nextAch, tally, cal, mapHtml, mode: () => MODE, T, dailyList, hardList, probOf, starsOf, todayKey, dayNo, shareText, streak, load, valid, cur: () => cur, go: (j) => go(j), play: (m) => { if (m) MODE = m; play(); } };
 home();
 if ("serviceWorker" in navigator && location.protocol === "https:" && /github\.io$/.test(location.hostname)) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>

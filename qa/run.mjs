@@ -62,7 +62,7 @@ check("別のタブで先に進んだ道を、古いタブの短い道で上書�
 const ext = [...html.matchAll(/(?:src|href)="(https?:[^"]+)"/g)].map((m) => m[1]).filter((u) => !/^https:\/\/fonts\.googleapis\.com(\/|$)|^https:\/\/ko-fi\.com\/satouaaaaa$/.test(u));
 check("外から読むのは文字（Google Fonts）だけ。スクリプト・広告・解析を入れない", ext.length === 0, ext.join(","));
 check("CSP で通信先を自分だけにしている", /connect-src 'self'/.test(html) && !/connect-src[^;"]*https/.test(html));
-check("Math.random は練習・とことんの問題の種だけ（今日の3問・上級は日付の種）", (html.match(/Math\.random/g) || []).length === 3 && !/Math\.random/.test(readFileSync(path.join(root, "gen.js"), "utf8")));
+check("Math.random は練習・とことんの問題選び（種・一覧からの選び直し・並べ替え・回の見分け）だけ（今日の3問・上級は日付の種）", (html.match(/Math\.random/g) || []).length === 4 && !/Math\.random/.test(readFileSync(path.join(root, "gen.js"), "utf8")));
 check("画面にお笑いの言葉を入れない（本物っぽく）", !/お笑い|ギャグ|ボケ|ツッコミ|なんでやねん|（うそ）/.test(html));
 { const og = (k) => (html.match(new RegExp(`<meta (?:property|name)="${k}" content="([^"]+)"`)) || [])[1] || "";
   const png = readFileSync(path.join(root, "og.png"));
@@ -391,6 +391,12 @@ try {
     const pe = await pageAt("2026-11-20", 390, base());
     check("とことんの並び（300回）：近場3→遠出7→通行止め50、1回の中で同じ問題（出発・目的・通行止め）を出さない・問題が作れる", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 300; n++) { const L = g.endlessList(); if (L.length !== 60) return false; if (!L.every((x, i) => x.lv === (i < 3 ? 0 : i < 10 ? 1 : 2))) return false; const ps = L.map(g.probOf); if (!ps.every(Boolean) || new Set(ps.map(g.keyOf)).size !== 60) return false; } return true; }));
     check("とことんの足し分（100回）：遠出・通行止めを40問足し、それまでの並びと重ねない", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 100; n++) { const run = { list: g.endlessList() }; const more = g.moreList(run); const all = [...run.list, ...more].map(g.probOf); if (more.length !== 40 || !more.every((x) => x.lv === 1 || x.lv === 2) || !all.every(Boolean) || new Set(all.map(g.keyOf)).size !== 100) return false; } return true; }));
+    check("make が作れない種（null）でも、freshItem・とことんの並びは作れる問題だけ（200回）", await pe.evaluate(() => { const g = window.__td, mk = g.T.make; g.T.make = () => null; try { for (let n = 0; n < 200; n++) if (!g.probOf(g.freshItem(n % 4, new Set()))) return false; for (let n = 0; n < 5; n++) if (!g.endlessList().every((x) => g.probOf(x))) return false; return true; } finally { g.T.make = mk; } }));
+    check("まだの問題が1つでも残っていれば、freshItem は必ずそれを出す（4種類×100回）", await pe.evaluate(() => { const g = window.__td; for (let lv = 0; lv < 4; lv++) { const ks = [...g.poolOf(lv).keys()]; for (let n = 0; n < 100; n++) { const keep = ks[Math.floor(Math.random() * ks.length)], avoid = new Set(ks.filter((k) => k !== keep)); if (g.kOf(g.freshItem(lv, avoid)) !== keep) return false; } } return true; }));
+    check("全部出し終えたあとは重なりを許すが、直前と同じ問題は出さない（4種類×100回）", await pe.evaluate(() => { const g = window.__td; for (let lv = 0; lv < 4; lv++) { const ks = [...g.poolOf(lv).keys()]; for (let n = 0; n < 100; n++) { const prev = ks[Math.floor(Math.random() * ks.length)], k = g.kOf(g.freshItem(lv, new Set(ks), prev)); if (!k || k === prev) return false; } } return true; }));
+    check("出せる問題の一覧（T.all）は種から作れる問題と同じ（近場・遠出・地図なし）", await pe.evaluate(() => { const g = window.__td; for (const lv of [0, 1, 3]) { const pool = g.poolOf(lv); for (let sd = 0; sd < 3000; sd++) { const k = g.kOf({ seed: sd, lv }); if (k && !pool.has(k)) return false; } } return true; }));
+    check("全部出し終えたあとに足す分も、となり合う2問（つなぎ目も）が同じにならない（100回）", await pe.evaluate(() => { const g = window.__td, all = [1, 2].flatMap((lv) => [...g.poolOf(lv).keys()].map((k) => ({ k, lv }))); for (let n = 0; n < 100; n++) { const run = { list: all.slice(0, all.length - Math.floor(Math.random() * 3)) }, L = [run.list[run.list.length - 1], ...g.moreList(run)].map(g.kOf); if (L.some((k, j) => !k || (j && k === L[j - 1]))) return false; } return true; }));
+    check("とことんの次の問題が recent にあれば出す前に差し替え、遊んでいる途中の問題は変えない（300回）", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 300; n++) { const list = g.endlessList(), i = Math.floor(Math.random() * 55), k0 = g.kOf(list[i]), s = { recent: { [k0]: 1 } }; const r = { list: list.slice(), res: list.slice(0, i).map(() => ({})), cur: null }; if (!g.tidyE(r, s)) return false; const k1 = g.kOf(r.list[i]); if (!k1 || k1 === k0 || new Set(r.list.map(g.kOf)).size !== r.list.length) return false; const r2 = { list: list.slice(), res: r.res, cur: { i, path: [], moves: 0 } }; if (g.tidyE(r2, s) || g.kOf(r2.list[i]) !== k0) return false; } return true; }));
     check("とことんは最近遊んだ問題（recent）を出さない（100回）", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 100; n++) { const avoid = new Set(g.endlessList().map((x) => g.keyOf(g.probOf(x)))); const L = g.endlessList(avoid); if (L.some((x) => avoid.has(g.keyOf(g.probOf(x))))) return false; } return true; }));
     check("ホームに「とことん」の大きなボタン", (await pe.locator("#go-e.main").count()) === 1);
     check("ページに🎫・「…すると開く」が無い（好きなだけ遊べる）", !html.includes("🎫") && !/すると開く|で開きます|クリアで解放/.test(html) && !/\blife\s*:/.test(html));
@@ -420,6 +426,20 @@ try {
     // 前の版の途中経過（🎫の life あり・0枚）も読めて、ヒントが押せる
     await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.e.life = 0; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
     check("前の版の途中経過（life: 0）でも続きから遊べ、ヒントが押せる", (await pe.textContent("header")).includes("58問目") && !(await pe.locator("#hint").isDisabled()));
+    // 壊れた問題（作れない種・形のちがう項目）が並びにあっても、続きから遊べ、差し替える
+    await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); const r = s.runs.e; r.cur = null; r.list[57] = { seed: "x", lv: 7 }; r.list[58] = {}; r.list[59] = null; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
+    check("並びの作れない問題は続きからのときに差し替え、画面が壊れない", (await pe.textContent("header")).includes("58問目") && (await pe.locator("#nx button").count()) > 0 && (await pe.evaluate(() => { const g = window.__td, r = g.load().runs.e; return r.list.slice(57).every((x) => g.probOf(x)); })));
+    // 練習などで遊んだ問題が、まだ見せていない次の問題にあれば差し替える
+    await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); const r = s.runs.e; r.cur = null; const p = window.__td.probOf(r.list[57]); s.recent[window.__td.keyOf(p)] = Date.now(); s.qaK = window.__td.keyOf(p); localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
+    check("まだ見せていない次の問題が recent にあれば、出す前に別の問題にする", await pe.evaluate(() => { const g = window.__td, s = g.load(), r = s.runs.e; return g.kOf(r.list[57]) !== s.qaK && !s.recent[g.kOf(r.list[57])] && g.keyOf(g.cur().p) === g.kOf(r.list[57]); }));
+    await pe.click("#nx button:not([disabled])");
+    await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); const r = s.runs.e; s.recent[window.__td.kOf(r.list[57])] = Date.now(); s.qaK = window.__td.kOf(r.list[57]); localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
+    check("遊んでいる途中の問題は recent にあっても変えない（進んだ県のまま）", await pe.evaluate(() => { const g = window.__td, s = g.load(); return g.kOf(s.runs.e.list[57]) === s.qaK && g.cur().path.length === 2; }));
+    // 前の版のタブで終えたまま結果を見ていない回（60問全部）は、新しく始める前に自己ベストに入れる
+    await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); const r = s.runs.e; r.list = r.list.slice(0, 60); r.res = r.list.map(() => ({ m: 3, d: 3, h: 0 })); r.cur = null; r.life = 0; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back");
+    check("ホームでは終えた回を続きからにしない", !(await pe.textContent("#go-e")).includes("続きから"));
+    await pe.click("#go-e");
+    check("前の版で終えた回の数（60問）を自己ベストに入れてから、新しいとことんを始める", await pe.evaluate(() => { const s = window.__td.load(); return s.ebest === 60 && s.runs.e.res.length === 0 && s.runs.e.list.length === 60; }) && (await pe.textContent("header")).includes("1問目"));
     await pe.close(); }
   { // 練習は何度でも・最近遊んだ問題を出さない
     const pr = await pageAt("2026-11-20", 390, base());
