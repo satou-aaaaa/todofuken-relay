@@ -252,7 +252,7 @@ try {
     await pn.evaluate((k) => { const g = window.__td, d = new Date(Date.parse(g.todayKey()) - 864e5).toISOString().slice(0, 10); localStorage.setItem(k, JSON.stringify({ v: 1, tut: true, days: {}, hdays: {}, seen: {}, trips: 0, kofi: {}, runs: { d: { mode: "d", date: d, list: g.dailyList(d), res: [0, 1, 2].map(() => ({ m: 3, d: 3, h: 0 })), id: "a" } } })); }, KEY);
     await pn.reload();
     check("前の日に終えて閉じても、翌日に開くとその日の記録がつく", await pn.evaluate(() => { const g = window.__td; return !!g.load().days[new Date(Date.parse(g.todayKey()) - 864e5).toISOString().slice(0, 10)] && !g.load().runs.d; }));
-    check("前の日の結果の画面からは、今日の上級を始められない（今日の分を先に）", !(await pn.locator("#go-h").count()));
+    check("前の日の結果の画面に、今日の上級のボタンを出さない", !(await pn.locator("#go-h").count()));
     check("保存に失敗したあと別のタブが新しく保存していたら、古いメモリで上書きせずそちらを読む", await pn.evaluate((K) => { const g = window.__td, s0 = g.load(); mem = JSON.stringify(Object.assign({}, s0, { t: 1, tagA: 1 })); localStorage.setItem(K, JSON.stringify(Object.assign({}, s0, { t: 2, tagB: 1 }))); const r = g.load(); mem = null; return !!r.tagB && !r.tagA; }, KEY));
     check("保存に失敗したあと別のタブが保存しても、両方の記録（日ごとの結果）を残し、県帳の数は多いほう", await pn.evaluate((K) => { const g = window.__td, s0 = g.load(); mem = JSON.stringify(Object.assign({}, s0, { t: 5, days: { "2000-01-01": 1 }, seen: { 長野県: 9 } })); localStorage.setItem(K, JSON.stringify(Object.assign({}, s0, { t: 9, days: { "2000-01-02": 1 }, seen: { 長野県: 2 } }))); const r = g.load(); mem = null; return !!r.days["2000-01-01"] && !!r.days["2000-01-02"] && r.seen["長野県"] === 9; }, KEY));
     check("保存に失敗したタブの時刻が進んでいても、別のタブで先に進んだ途中経過を古いメモリで戻さない", await pn.evaluate((K) => { const g = window.__td, s0 = g.load(), base = { mode: "d", date: "2000-01-01", list: [{ seed: 1, lv: 0 }], id: "x", res: [] }; mem = JSON.stringify(Object.assign({}, s0, { t: 99, runs: { d: Object.assign({}, base) } })); localStorage.setItem(K, JSON.stringify(Object.assign({}, s0, { t: 1, runs: { d: Object.assign({}, base, { res: [{ m: 3, d: 3, h: 0 }] }) } }))); const r = g.load(); mem = null; return r.runs.d.res.length === 1; }, KEY));
@@ -387,25 +387,48 @@ try {
     await pz.click('.cal button[data-k="2026-11-13"]');
     check("開いたまま日付が進んで過去7日から外れた日は、あとから始めない", !(await pz.evaluate(() => window.__td.mode())).startsWith("a"));
     await pz.close(); }
-  { // とことん：問題が次々に出る・近場→遠出→通行止め・ヒントは🎫を使う・降りると自己ベスト（2026-11-05 satou さん「一日で遊べる量が少なすぎる」）
+  { // とことん：問題が次々に出る・近場→遠出→通行止め・ヒントは何も減らさない・降りるまで終わらない・降りると自己ベスト（2026-11-05「一日で遊べる量が少なすぎる」・2026-11-06「好きなだけ遊んでほしい」satou さん）
     const pe = await pageAt("2026-11-20", 390, base());
-    check("とことんの並び（300回）：近場3→遠出7→通行止め50、種はばらばら・問題が作れる", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 300; n++) { const L = g.endlessList(); if (L.length !== 60 || new Set(L.map((x) => x.seed)).size < 59) return false; if (!L.every((x, i) => x.lv === (i < 3 ? 0 : i < 10 ? 1 : 2))) return false; if (n < 5 && !L.every((x) => g.probOf(x))) return false; } return true; }));
+    check("とことんの並び（300回）：近場3→遠出7→通行止め50、1回の中で同じ問題（出発・目的・通行止め）を出さない・問題が作れる", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 300; n++) { const L = g.endlessList(); if (L.length !== 60) return false; if (!L.every((x, i) => x.lv === (i < 3 ? 0 : i < 10 ? 1 : 2))) return false; const ps = L.map(g.probOf); if (!ps.every(Boolean) || new Set(ps.map(g.keyOf)).size !== 60) return false; } return true; }));
+    check("とことんの足し分（100回）：遠出・通行止めを40問足し、それまでの並びと重ねない", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 100; n++) { const run = { list: g.endlessList() }; const more = g.moreList(run); const all = [...run.list, ...more].map(g.probOf); if (more.length !== 40 || !more.every((x) => x.lv === 1 || x.lv === 2) || !all.every(Boolean) || new Set(all.map(g.keyOf)).size !== 100) return false; } return true; }));
+    check("とことんは最近遊んだ問題（recent）を出さない（100回）", await pe.evaluate(() => { const g = window.__td; for (let n = 0; n < 100; n++) { const avoid = new Set(g.endlessList().map((x) => g.keyOf(g.probOf(x)))); const L = g.endlessList(avoid); if (L.some((x) => avoid.has(g.keyOf(g.probOf(x))))) return false; } return true; }));
     check("ホームに「とことん」の大きなボタン", (await pe.locator("#go-e.main").count()) === 1);
+    check("ページに🎫・「…すると開く」が無い（好きなだけ遊べる）", !html.includes("🎫") && !/すると開く|で開きます|クリアで解放/.test(html) && !/\blife\s*:/.test(html));
     await pe.click("#go-e");
     for (let j = 0; j < 3; j++) { await solveNow(pe); await pe.click("#next"); }
-    check("とことんは何問目かを出し、🎫が3枚", (await pe.textContent("header")).includes("4問目") && (await pe.evaluate(() => window.__td.load().runs.e.life)) === 3);
-    await pe.click("#hint");
-    check("とことんのヒントは🎫を1枚使う", (await pe.evaluate(() => window.__td.load().runs.e.life)) === 2);
+    check("とことんは何問目かを出し、🎫を出さない", (await pe.textContent("header")).includes("4問目") && !(await pe.content()).includes("🎫"));
+    check("遊んでいる画面に Ko-fi を出さない", !/ko-fi/i.test(await pe.evaluate(() => document.body.innerText + [...document.querySelectorAll("a")].map((x) => x.href).join(" "))));
+    await pe.click("#hint"); await pe.click("#hint");
+    check("とことんのヒントは何も減らさず、2回使っても続けられる", (await pe.evaluate(() => window.__td.cur().hints)) === 2 && (await pe.locator("#quit").count()) === 1);
     await pe.click("#back"); await pe.click("#go-e");
-    check("とことんは途中で閉じても続きから（4問目・🎫2・ヒント1回のまま）", (await pe.textContent("header")).includes("4問目") && (await pe.evaluate(() => window.__td.load().runs.e.life)) === 2 && (await pe.evaluate(() => window.__td.cur().hints)) === 1);
+    check("とことんは途中で閉じても続きから（4問目・ヒント2回のまま）", (await pe.textContent("header")).includes("4問目") && (await pe.evaluate(() => window.__td.cur().hints)) === 2);
+    await solveNow(pe, 2); await pe.click("#next");
+    check("遠回り・ヒントのあとも終わらず次の問題へ進む", (await pe.textContent("header")).includes("5問目") && (await pe.evaluate(() => window.__td.load().runs.e.res.length)) === 4);
     await pe.click("#quit");
-    check("降りると着いた数と自己ベスト更新が出て、記録に残る（今日の記録・連続には入らない）", (await pe.textContent("#eres")).includes("3問") && (await pe.textContent("#ebest")).includes("自己ベスト更新") && (await pe.evaluate(() => { const s = window.__td.load(); return s.ebest === 3 && !s.runs.e && Object.keys(s.days).length === 0; })));
+    check("降りると着いた数と自己ベスト更新が出て、記録に残る（今日の記録・連続には入らない）", (await pe.textContent("#eres")).includes("4問") && (await pe.textContent("#ebest")).includes("自己ベスト更新") && (await pe.evaluate(() => { const s = window.__td.load(); return s.ebest === 4 && !s.runs.e && Object.keys(s.days).length === 0; })));
+    check("遊んだ問題を recent に覚える", (await pe.evaluate(() => Object.keys(window.__td.load().recent).length)) === 4);
     await pe.click("#go-e"); await pe.click("#quit");
-    check("ベストに届かないと、ベストと「あと何問で更新」を出し、ベストは下げない", (await pe.textContent("#ebest")).includes("あと4問で更新") && (await pe.evaluate(() => window.__td.load().ebest)) === 3);
+    check("ベストに届かないと、ベストと「あと何問で更新」を出し、ベストは下げない", (await pe.textContent("#ebest")).includes("あと5問で更新") && (await pe.evaluate(() => window.__td.load().ebest)) === 4);
+    // 並びの終わり近くまで進めても終わらず、問題が足される
     await pe.click("#go-e");
+    await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); const r = s.runs.e; r.res = r.list.slice(0, 56).map(() => ({ m: 3, d: 3, h: 0 })); r.cur = null; localStorage.setItem(k, JSON.stringify(s)); }, KEY);
+    await pe.click("#back"); await pe.click("#go-e");
+    await solveNow(pe);
+    check("並びの残りが少なくなると問題を足して終わらない（「結果を見る」にしない）", (await pe.evaluate(() => { const r = window.__td.load().runs.e; return r.list.length === 100 && r.res.length === 57; })) && (await pe.textContent("#next")).includes("次の問題"));
+    await pe.click("#next");
+    check("足したあとも続けて遊べる（58問目）", (await pe.textContent("header")).includes("58問目"));
+    // 前の版の途中経過（🎫の life あり・0枚）も読めて、ヒントが押せる
     await pe.evaluate((k) => { const s = JSON.parse(localStorage.getItem(k)); s.runs.e.life = 0; localStorage.setItem(k, JSON.stringify(s)); }, KEY); await pe.click("#back"); await pe.click("#go-e");
-    check("🎫が無いとヒントは押せない", await pe.locator("#hint").isDisabled());
+    check("前の版の途中経過（life: 0）でも続きから遊べ、ヒントが押せる", (await pe.textContent("header")).includes("58問目") && !(await pe.locator("#hint").isDisabled()));
     await pe.close(); }
+  { // 練習は何度でも・最近遊んだ問題を出さない
+    const pr = await pageAt("2026-11-20", 390, base());
+    check("練習を60回続けても、同じ問題が出ない（種類ごと・recent で避ける）", await pr.evaluate(() => { const g = window.__td; for (let lv = 0; lv < 4; lv++) { const s = { recent: {} }, seen = new Set(); for (let n = 0; n < 60; n++) { const it = g.freshItem(lv, new Set(Object.keys(s.recent))); const p = g.probOf(it), k = g.keyOf(p); if (seen.has(k)) return false; seen.add(k); g.remember(s, p); } } return true; }));
+    check("recent は新しい RECENT 問だけ残す", await pr.evaluate(() => { const g = window.__td, s = { recent: {} }; for (let n = 0; n < g.RECENT + 30; n++) g.remember(s, { s: n % 46, g: (n * 7) % 46, closed: [n] }); return Object.keys(s.recent).length === g.RECENT; }));
+    check("上級ははじめて開いた日からホームで押せる（今日の3問の前でも）", (await pr.locator("#go-h").count()) === 1);
+    await pr.click("#go-h");
+    check("今日の3問の前に上級を始められる", (await pr.evaluate(() => window.__td.mode())) === "h");
+    await pr.close(); }
   { // 1回目の今日の3問を終えると「旅立ち」が出て、結果を開き直すと出ない
     const pf = await pageAt("2026-11-20", 390, base());
     await pf.click("#go-d"); for (let j = 0; j < 3; j++) { await solveNow(pf); await pf.click("#next"); }
