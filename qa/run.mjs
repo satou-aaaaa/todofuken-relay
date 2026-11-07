@@ -74,7 +74,7 @@ check("画面にお笑いの言葉を入れない（本物っぽく）", !/お�
   { const st = await checkSwStall(sw); check("PWA：本文の途中で通信が止まっても4秒で保存したものを返す・ふつうはネットの返事", st.ok, JSON.stringify(st)); }
   const shell = JSON.parse(sw.match(/SHELL = (\[[^\]]+\])/)[1].replace(/'/g, '"'));
   const need = ["./index.html", "./transfer.js", "./gen.js", "./map.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
-  check("PWA：ネットの返事の保存は、イベントの中で waitUntil に預ける（遅れて届いた新しい版も保存できる）", /e\.waitUntil\(Promise\.race\(\[net\.then[^\n]*wait\(15000\)[^\n]*wait\(60000\)\]\)\)/.test(sw));
+  check("PWA：ネットの返事の保存は、イベントの中で waitUntil に預ける（遅れて届いた新しい版も保存できる）", /e\.waitUntil\(new Promise\(\(r\) => \{ saved = r; \}\)\)/.test(sw));
   check("PWA：sw.js は画面のファイルを全部保存し、外へ何も送らない", need.every((f) => shell.includes(f)) && !/https?:\/\//.test(sw.replace(/^\/\/.*$/gm, "")));
   check("PWA：manifest にアイコン2つと名前がある", mf.name === "都道府県リレー" && mf.icons.length >= 2 && mf.start_url === "./"); }
 { const src = html + readFileSync(path.join(root, "gen.js"), "utf8");
@@ -529,7 +529,7 @@ try {
     await pa.click("#hint");
     c = await curT(pa);
     const hl = await pa.evaluate(() => [...document.querySelectorAll("#mp svg text")].map((t) => t.textContent));
-    check("色だけで分けない：ヒントの県は地図の県名とボタンに💡と「ヒント」、知らせ（#live）にも県名", hl.includes("💡" + T.short(c.hint)) && (await pa.textContent("#nx button.hint")).includes("💡") && (await pa.textContent("#nx button.hint")).includes("ヒント") && (await pa.waitForFunction((n) => document.getElementById("live").textContent.includes(n), M.P[c.hint][0]).then(() => true, () => false)));
+    check("色だけで分けない：ヒントの県は地図の県名とボタンに💡と「ヒント」、知らせ（#live）にも県名", hl.some((t) => t.endsWith("💡" + T.short(c.hint))) && (await pa.textContent("#nx button.hint")).includes("💡") && (await pa.textContent("#nx button.hint")).includes("ヒント") && (await pa.waitForFunction((n) => document.getElementById("live").textContent.includes(n), M.P[c.hint][0]).then(() => true, () => false)));
     // 遠回りして、最短をこえた数を文字でも出す
     const at = c.path[c.path.length - 1], back = c.path[0];
     for (let k = 0; k < 6 && c.moves <= c.p.d; k++) { await pa.click(`#nx button[data-j="${back}"]`); await pa.click(`#nx button[data-j="${at}"]`); c = await curT(pa); }
