@@ -644,10 +644,10 @@ function arrive() {
   const r = s.runs[MODE], fin = r && r.mode !== "e" && r.res.length >= r.list.length, best = T.path(p.s, p.g, p.closed);
   $("after").innerHTML = `<div class="verdict" data-a11y-say>
     <div class="hd">${T.short(p.g)}に到着！ ${starStr(st)}</div>
-    <p class="note">${cur.moves === p.d ? `最短の${p.d}回で着きました。` : `${cur.moves}回で着きました（最短は${p.d}回）。`}最短の道は${p.ways}通り。<br>${cur.moves === p.d ? "例" : "点線（‥‥）が最短の例"}：${best.map(T.short).join("→")}</p>
+    <p class="note">${cur.moves === p.d ? `最短の${p.d}回で着きました。` : `${cur.moves}回で着きました（最短は${p.d}回・<b>最短より+${cur.moves - p.d}</b>）。`}最短の道は${p.ways}通り。<br>${cur.moves === p.d ? "例" : "点線（‥‥）が最短の例"}：${best.map(T.short).join("→")}</p>
     <button class="main" id="next">${fin ? "結果を見る" : "次の問題へ"}</button></div>`;
   $("next").onclick = play;
-  tell(`${T.name(p.g)}に到着。星${st}つ。${cur.moves === p.d ? `最短の${p.d}回` : `${cur.moves}回（最短は${p.d}回）`}`);
+  tell(`${T.name(p.g)}に到着。星${st}つ。${cur.moves === p.d ? `最短の${p.d}回` : `${cur.moves}回（最短は${p.d}回・最短より+${cur.moves - p.d}）`}`);
   setTimeout(() => { if ($("next") && cur.done) $("next").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "nearest" }); }, 60);
 }
 
