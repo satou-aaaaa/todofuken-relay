@@ -71,6 +71,7 @@ button.sub:disabled{opacity:.4;cursor:default}
 .map text{font-family:var(--f-body);font-weight:800;paint-order:stroke;stroke:#fffdf7;stroke-width:3px;fill:var(--ink);text-anchor:middle;dominant-baseline:middle;pointer-events:none}
 .map .pin{stroke:#fff;stroke-width:1.5;vector-effect:non-scaling-stroke}
 .map.hide svg{display:none}
+.map.hero svg{max-height:min(300px,34vh);margin:0 auto}
 .map .blind{display:none;padding:26px 12px;text-align:center;color:var(--ink2);font-size:14px}
 .map.hide .blind{display:block}
 .trip{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:14px;line-height:1.5}
@@ -501,13 +502,13 @@ function home() {
   const sample = { s: 2, g: 26, closed: [] };
   app.innerHTML = `
     <h1 class="title">都道府県リレー</h1>
-    <div class="map" aria-hidden="true">${mapHtml(sample, { path: T.path(2, 26) || [], full: true })}</div>
+    <div class="map hero" aria-hidden="true">${mapHtml(sample, { path: T.path(2, 26) || [], full: true })}</div>
     <p class="lead" data-a11y-say>となりの県だけを通って、目的の県へ。<br>だれでも同じ1日3問。</p>
     ${done ? `<div class="share">今日の結果　${done.r.map(sq).join("")}</div>` : ""}
     <button class="main" id="go-d">${done ? "今日の結果を見る" : rd ? `続きから（${rd.res.length + 1}問目）` : `今日の3問に出発 <small>#${dayNo(k)}</small>`}</button>
-    <button class="main alt" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：地図なしの2問（ヒントなし）"}</button>
+    <button class="main alt" id="go-h">${hdone ? "上級の結果を見る" : rh ? "上級の続きから" : "上級：地図なしの2問"}</button>
     ${(() => { const re = s.runs.e && !doneOf(s.runs.e) ? s.runs.e : null; return `<button class="main alt" id="go-e">${re ? `とことんの続きから（${re.res.length + 1}問目）` : "とことん：何問続けて着ける？"}${s.ebest ? ` <small>自己ベスト ${s.ebest}問</small>` : ""}</button>`; })()}
-    <div class="row"><button class="sub" id="go-p">練習（何度でも）</button><button class="sub" id="go-dex">県帳 ${Object.keys(s.seen).length}/${M.P.length}</button></div>
+    <div class="row"><button class="sub" id="go-p">練習</button><button class="sub" id="go-dex">県帳 ${Object.keys(s.seen).length}/${M.P.length}</button></div>
     <div class="row"><button class="sub" id="go-cal" aria-label="カレンダー${late.length ? `（あとから遊べる日 ${late.length}）` : ""}">カレンダー${late.length ? ` <small class="badge">▶${late.length}</small>` : ""}</button><button class="sub" id="go-ach">実績 ${ag}/${ACH.length}</button></div>
     <div class="stats"><div><b>${streak(s.days)}</b><small>連続の日</small></div><div><b>${Object.keys(s.days).length}</b><small>遊んだ日</small></div><div><b>${s.trips}</b><small>着いた旅</small></div></div>
     <p class="rank">称号：${rankOf(s.trips)}${nr ? `（あと${nr[0] - s.trips}回で${nr[1]}）` : ""}</p>
@@ -576,10 +577,10 @@ function play() {
     <div class="goal" data-a11y-say><span class="from">▶ 出発<br><b>${T.name(p.s)}</b></span><span class="par" id="par">最短<b>${p.d}回</b></span><span class="to" style="text-align:right">◎ 目的<br><b>${T.name(p.g)}</b></span></div>
     ${p.closed.length ? `<p class="note" data-a11y-say>通行止め：<b>${p.closed.map(T.name).join("・")}</b>は通れません</p>` : ""}
     <div class="map${blind ? " hide" : ""}" id="mp"><div class="blind">地図なし。県の位置を思い出して進もう</div></div>
-    <div class="status"><span id="left"></span>${run.mode === "h" ? "<span>ヒントなし</span>" : `<button class="sub" id="hint" style="min-height:44px;padding:0 14px">ヒント</button>`}</div>
+    <div class="status" id="st"><span id="left"></span>${run.mode === "h" ? "<span>ヒントなし</span>" : ""}</div>
     <div class="trip" id="trip"></div>
     <div class="nexts" id="nx"></div>
-    <div class="row"><button class="sub" id="undo">ひとつ戻る</button></div>
+    <div class="row" id="ctl"><button class="sub" id="undo">↶ ひとつ戻る</button>${run.mode === "h" ? "" : `<button class="sub" id="hint">💡 ヒント</button>`}</div>
     ${run.mode === "e" ? `<p class="note">遠回りしてもヒントを使っても続きます。好きなところで降りられます。</p><button class="sub" id="quit" style="width:100%">ここで降りる（${i}問で終える）</button>` : ""}
     <div id="after"></div>`;
   $("back").onclick = home;
@@ -612,6 +613,7 @@ function paint() {
   $("left").innerHTML = cur.done ? "" : `進んだ回数 <b>${cur.moves}</b>${cur.moves > p.d ? `（最短より+${cur.moves - p.d}）` : ""}${cur.hints ? `・ヒント ${cur.hints}` : ""}`;
   $("left").classList.toggle("over", cur.moves > p.d); // 最短の回数をこえたら数字の色を変える（遠回りに気づける）
   $("undo").disabled = cur.done || cur.path.length <= 1;
+  $("ctl").hidden = $("st").hidden = cur.done; // 着いたら、使い終えた「戻る・ヒント」を隠して、答え合わせを道のすぐ下に出す
   if ($("hint")) $("hint").disabled = cur.done || cur.hints >= 2;
 }
 function go(j) {
@@ -704,12 +706,12 @@ function result(mode, k, first, prec, newAch = []) {
     ${(() => { const nx = nextAch(s); return nx ? `<p class="achnext" id="achnext">🎯 次の実績「${nx.name}」まで あと${nx.left}（${nx.n}/${nx.goal}）</p>` : ""; })()}
     <div class="res">${list.map((it, j) => { const p = probOf(it), r = rec.r[j]; return `<div><span>${T.short(p.s)} → ${T.short(p.g)}<br><small style="color:var(--ink2)">${r.m}回（最短${r.d}回）${r.h ? `・ヒント${r.h}` : ""}</small></span>${starStr(starsOf(r))}</div>`; }).join("")}</div>
     ${late ? `<p class="note">あとから遊んだ日は、カレンダーに ↺ で残ります（連続の日には数えません）。</p><button class="main alt" id="go-cal">カレンダーへ</button>` : ""}
-    ${mode !== "p" && !late ? `<div class="share">${esc(text)}</div>
-    <button class="main" id="share">結果をシェア</button>
-    <div class="shares"><a id="toX" target="_blank" rel="noopener">Xで投稿</a><a id="toLine" target="_blank" rel="noopener">LINEで送る</a><button id="copy">コピー</button></div>
-    <p class="note">🟩最短　🟨2回まで遠回り　🟧もっと遠回り　💡ヒント<br>次の3問まで あと <b>${untilNext()}</b></p>` : ""}
     ${mode !== "p" ? `<button class="main" id="go-e">続けて遊ぶ：とことん${s.ebest ? `（ベスト ${s.ebest}問）` : ""}</button>` : ""}
     ${mode === "d" && k === todayKey() && !s.hdays[k] ? `<button class="main alt" id="go-h">上級：地図なしの2問に挑む</button>` : ""}
+    ${mode !== "p" && !late ? `<div class="share">${esc(text)}</div>
+    <button class="main alt" id="share">結果をシェア</button>
+    <div class="shares"><a id="toX" target="_blank" rel="noopener">Xで投稿</a><a id="toLine" target="_blank" rel="noopener">LINEで送る</a><button id="copy">コピー</button></div>
+    <p class="note">🟩最短　🟨2回まで遠回り　🟧もっと遠回り　💡ヒント<br>次の3問まで あと <b>${untilNext()}</b></p>` : ""}
     <div class="row"><button class="sub" id="go-p">練習する</button><button class="sub" id="go-dex">県帳を見る</button></div>
     ${showKofi ? `<p class="note kofi">楽しめたら、<a href="https://ko-fi.com/satouaaaaa" target="_blank" rel="noopener">Ko-fi でコーヒー1杯の応援</a>をもらえると、新しいゲームづくりの励みになります（任意・遊ぶのはずっと無料）。</p>` : ""}
     <p class="note"><a href="${FEEDBACK}" target="_blank" rel="noopener">感想を送る</a></p>`;

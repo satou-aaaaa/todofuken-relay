@@ -472,6 +472,26 @@ try {
       check(`幅${w}px：ホーム・実績・カレンダー・あとから・結果が横にはみ出さず、押せる所は44px以上`, bad.length === 0, bad.join(" "));
       await pw.close();
     } }
+  // 8. スマホの1画面目（2026-11-07 UI/UX の見直し）：最初に押すボタン・進む県のボタン・答え合わせ・「続けて遊ぶ」が、スクロールしなくても見える
+  for (const [w, h] of [[390, 844], [320, 640]]) {
+    const pu = await pageAt("2026-11-20", w, base()); await pu.setViewportSize({ width: w, height: h }); await pu.reload();
+    const inView = (sel) => pu.evaluate((q) => { const e = document.querySelector(q); if (!e || !e.offsetParent) return false; const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 0.5; }, sel);
+    const homeOk = (await inView("#go-d")) && (await inView("#go-h"));
+    const oneLine = await pu.evaluate(() => $("go-h").getBoundingClientRect().height < 60 && [...document.querySelectorAll("#app .row .sub")].every((e) => e.getBoundingClientRect().height < 50));
+    check(`幅${w}×${h}：ホームの「今日の3問に出発」と上級のボタンが1画面目に見え、上級・練習などのボタンは1行`, homeOk && oneLine);
+    await pu.click("#go-d");
+    const playOk = (await inView("#nx button")) && (await inView("#undo")) && (await inView("#hint"));
+    const ctlRow = await pu.evaluate(() => Math.abs($("undo").getBoundingClientRect().top - $("hint").getBoundingClientRect().top) < 2);
+    check(`幅${w}×${h}：1問目で、進む県のボタン・「ひとつ戻る」・「ヒント」がスクロールせずに見え、戻る・ヒントは同じ行`, playOk && ctlRow);
+    await solveNow(pu); await pu.waitForTimeout(250);
+    const arr = await pu.evaluate(() => ({ ctl: $("ctl").hidden && !$("undo").offsetParent && !$("hint").offsetParent, st: $("st").hidden, v: !!document.querySelector("#after .verdict") }));
+    check(`幅${w}×${h}：着いたら使い終えた「戻る・ヒント」を隠し、答え合わせと「次の問題へ」が見える`, arr.ctl && arr.st && arr.v && (await inView("#next")));
+    await pu.click("#next"); for (let j = 0; j < 2; j++) { await solveNow(pu); await pu.click("#next"); }
+    const order = await pu.evaluate(() => { const e = $("go-e"), sh = $("share"); return !!(e && sh && (e.compareDocumentPosition(sh) & Node.DOCUMENT_POSITION_FOLLOWING) && sh.classList.contains("alt")); });
+    check(`幅${w}×${h}：結果の画面は「続けて遊ぶ：とことん」が1画面目に見え、シェアより上（赤い大きなボタンは1つ）`, order && (await inView("#go-e")) && (await pu.locator("#app button.main:not(.alt)").count()) === 1);
+    check(`幅${w}×${h}：結果の画面が横にはみ出さない`, await pu.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await pu.close();
+  }
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0]);
 } finally {
