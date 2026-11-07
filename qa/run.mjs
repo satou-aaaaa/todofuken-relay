@@ -472,6 +472,36 @@ try {
       check(`幅${w}px：ホーム・実績・カレンダー・あとから・結果が横にはみ出さず、押せる所は44px以上`, bad.length === 0, bad.join(" "));
       await pw.close();
     } }
+  // 8. スマホの1画面目（2026-11-07 UI/UX の見直し）：最初に押すボタン・進む県のボタン・答え合わせ・「続けて遊ぶ」が、スクロールしなくても見える
+  for (const [w, h] of [[390, 844], [320, 640]]) {
+    const pu = await pageAt("2026-11-20", w, base()); await pu.setViewportSize({ width: w, height: h }); await pu.reload();
+    const inView = (sel) => pu.evaluate((q) => { const e = document.querySelector(q); if (!e || !e.offsetParent) return false; const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 0.5; }, sel);
+    const homeOk = (await inView("#go-d")) && (await inView("#go-h"));
+    // 高さに加えて、ボタンの中の字が何行に並んだか（字の行の上端の数）も数える
+    const oneLine = await pu.evaluate(() => {
+      // 小さな字（<small> の数など）は同じ行でも上端が少しずれるので、縦に重なる字の箱は同じ行と数える
+      const lines = (b) => { const rs = []; const w = document.createTreeWalker(b, NodeFilter.SHOW_TEXT); for (let n; (n = w.nextNode());) { if (!n.textContent.trim()) continue; const r = document.createRange(); r.selectNodeContents(n); for (const q of r.getClientRects()) if (q.width > 0) rs.push([Math.round(q.top), Math.round(q.bottom)]); } const ls = []; for (const [t, bt] of rs.sort((x, y) => x[0] - y[0])) { const l = ls.find((l) => t < l[1] && bt > l[0]); if (l) { l[0] = Math.min(l[0], t); l[1] = Math.max(l[1], bt); } else ls.push([t, bt]); } return ls.length; };
+      const bs = [$("go-h"), ...document.querySelectorAll("#app .row .sub")];
+      return $("go-h").getBoundingClientRect().height < 60 && [...document.querySelectorAll("#app .row .sub")].every((e) => e.getBoundingClientRect().height < 50) && bs.every((e) => lines(e) <= 1);
+    });
+    check(`幅${w}×${h}：ホームの「今日の3問に出発」と上級のボタンが1画面目に見え、上級・練習などのボタンは1行`, homeOk && oneLine);
+    await pu.click("#go-d");
+    const playOk = (await inView("#nx button")) && (await inView("#undo")) && (await inView("#hint"));
+    const ctlRow = await pu.evaluate(() => Math.abs($("undo").getBoundingClientRect().top - $("hint").getBoundingClientRect().top) < 2);
+    check(`幅${w}×${h}：1問目で、進む県のボタン・「ひとつ戻る」・「ヒント」がスクロールせずに見え、戻る・ヒントは同じ行`, playOk && ctlRow);
+    await solveNow(pu); await pu.waitForTimeout(250);
+    const arr = await pu.evaluate(() => ({ ctl: $("ctl").hidden && !$("undo").offsetParent && !$("hint").offsetParent, st: $("st").hidden && getComputedStyle($("st")).display === "none", v: !!document.querySelector("#after .verdict") && !document.querySelector("#after .verdict").textContent.includes("最短より") }));
+    check(`幅${w}×${h}：着いたら使い終えた「戻る・ヒント」を隠し、答え合わせと「次の問題へ」が見える`, arr.ctl && arr.st && arr.v && (await inView("#next")));
+    // 遠回りして着いたら、答え合わせにも「最短より+N」を出す（道の上の数は着くと隠れるため。2026-11-07 CodeRabbit）
+    await pu.click("#next"); await solveNow(pu, 2); await pu.waitForTimeout(250);
+    const ov = await pu.evaluate(() => { const c = window.__td.cur(); return { n: c.moves - c.p.d, t: document.querySelector("#after .verdict")?.textContent || "" }; });
+    check(`幅${w}×${h}：遠回りして着くと、答え合わせに「最短より+N」（N=${ov.n}）が出る`, ov.n === 2 && ov.t.includes(`最短より+${ov.n}`), ov.t.slice(0, 80));
+    await pu.click("#next"); await solveNow(pu); await pu.click("#next");
+    const order = await pu.evaluate(() => { const e = $("go-e"), sh = $("share"); return !!(e && sh && (e.compareDocumentPosition(sh) & Node.DOCUMENT_POSITION_FOLLOWING) && sh.classList.contains("alt")); });
+    check(`幅${w}×${h}：結果の画面は「続けて遊ぶ：とことん」が1画面目に見え、シェアより上（赤い大きなボタンは1つ）`, order && (await inView("#go-e")) && (await pu.locator("#app button.main:not(.alt)").count()) === 1);
+    check(`幅${w}×${h}：結果の画面が横にはみ出さない`, await pu.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await pu.close();
+  }
 } catch (e) {
   check("QA の操作が最後まで完了する", false, e.message.split("\n")[0]);
 } finally {
