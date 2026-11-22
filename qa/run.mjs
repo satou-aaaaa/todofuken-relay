@@ -12,7 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const url = pathToFileURL(path.join(root, "index.html")).href;
 const results = [];
 const check = (name, ok, detail = "") => results.push({ name, ok: !!ok, detail });
-const firstClose = async (q) => { if (await q.locator("#howto[open]").count()) await q.click("#howto-ok"); if (await q.locator("#core-coach").count()) { await q.evaluate(() => Core.coach.leave()); await q.waitForTimeout(100); } }; // はじめての練習の吹き出しをやめてホームへ（sync-template の migrateFirstQa が足した）
+const firstClose = async (q) => { if (await q.locator("#howto[open]").count()) await q.click("#howto-ok"); if (await q.evaluate(() => !!(window.Core && Core.coach && Core.coach.active()))) { await q.evaluate(() => { Core.coach.leave(); scrollTo(0, 0); }); await q.waitForTimeout(100); } }; // はじめての練習の吹き出しをやめてホームへ（sync-template の migrateFirstQa が足した）
 const T = createRequire(import.meta.url)(path.join(root, "gen.js"));
 const M = T.M, idx = (n) => M.P.findIndex((p) => p[0] === n), adj = (a, b) => M.N[idx(a)].includes(idx(b));
 
@@ -203,7 +203,7 @@ try {
 
   // 5. スマホ幅：はみ出さない・押せる所は44px以上
   for (const w of [320, 390]) {
-    const p3 = await newPage(w, 700); await firstClose(p3).then(() => p3.click("#f-how")); const fb2 = await p3.evaluate(() => { const a = document.querySelector("#howto #fb2"); return a ? a.getBoundingClientRect().height : 0; }); check(`幅${w}px：遊び方の「感想を送る」も高さ44px以上`, fb2 >= 44, `${fb2}px`); await firstClose(p3);
+    const p3 = await newPage(w, 700); await firstClose(p3).then(() => p3.evaluate(() => openHow())); const fb2 = await p3.evaluate(() => { const a = document.querySelector("#howto #fb2"); return a ? a.getBoundingClientRect().height : 0; }); check(`幅${w}px：遊び方の「感想を送る」も高さ44px以上`, fb2 >= 44, `${fb2}px`); await firstClose(p3);
     const homeOk = await p3.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
     await p3.click("#go-d");
     const r = await p3.evaluate(() => ({ over: document.documentElement.scrollWidth > innerWidth, small: [...document.querySelectorAll("button, a")].filter((e) => e.offsetParent && Math.round(e.getBoundingClientRect().height) < 44).map((e) => e.id || e.textContent.trim().slice(0, 6)) }));
@@ -460,6 +460,7 @@ try {
     const pr = await pageAt("2026-11-20", 390, base());
     check("練習を60回続けても、同じ問題が出ない（種類ごと・recent で避ける）", await pr.evaluate(() => { const g = window.__td; for (let lv = 0; lv < 4; lv++) { const s = { recent: {} }, seen = new Set(); for (let n = 0; n < 60; n++) { const it = g.freshItem(lv, new Set(Object.keys(s.recent))); const p = g.probOf(it), k = g.keyOf(p); if (seen.has(k)) return false; seen.add(k); g.remember(s, p); } } return true; }));
     check("recent は新しい RECENT 問だけ残す", await pr.evaluate(() => { const g = window.__td, s = { recent: {} }; for (let n = 0; n < g.RECENT + 30; n++) g.remember(s, { s: n % 46, g: (n * 7) % 46, closed: [n] }); return Object.keys(s.recent).length === g.RECENT; }));
+    await firstClose(pr);
     check("上級ははじめて開いた日からホームで押せる（今日の3問の前でも）", (await pr.locator("#go-h").count()) === 1);
     await pr.click("#go-h");
     check("今日の3問の前に上級を始められる", (await pr.evaluate(() => window.__td.mode())) === "h");
@@ -566,12 +567,12 @@ try {
     await cw.addInitScript(() => { window.__origSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; });
     const pw = await cw.newPage(); await pw.goto(url); await pw.waitForTimeout(300);
     const nW = () => pw.evaluate(() => document.querySelectorAll("#savewarn").length);
-    if (!(await pw.isVisible("#howto-ok"))) await firstClose(pw).then(() => pw.click("#f-how"));
+    if (!(await pw.isVisible("#howto-ok"))) await firstClose(pw).then(() => pw.evaluate(() => openHow()));
     await firstClose(pw); await pw.waitForTimeout(100);
     const n1 = await nW(), txt = await pw.evaluate(() => (document.getElementById("savewarn") || {}).textContent || "");
     await pw.waitForTimeout(2000); const n2 = await nW();
     await pw.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
-    await firstClose(pw).then(() => pw.click("#f-how")); await firstClose(pw); await pw.waitForTimeout(100); const n3 = await nW();
+    await firstClose(pw).then(() => pw.evaluate(() => openHow())); await firstClose(pw); await pw.waitForTimeout(100); const n3 = await nW();
     check("保存できないブラウザで遊ぶと、帯（#savewarn）でちょうど1つ知らせ、2秒たっても残る・保存できるようになったら消える", n1 === 1 && n2 === 1 && txt.includes("保存できませんでした") && n3 === 0, JSON.stringify([n1, n2, n3, txt]));
     await cw.close();
   }
